@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>俄罗斯方块 · Tetris</title>
+<style>
+  :root {
+    --bg: #0f1226;
+    --panel: #181c3a;
+    --grid: #232850;
+    --text: #e8ecff;
+    --muted: #9aa3d0;
+    --accent: #5b8cff;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: radial-gradient(1200px 800px at 50% -10%, #1d2350 0%, var(--bg) 60%);
+    color: var(--text);
+    font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    min-height: 100vh;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .wrap {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 24px 16px 48px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  h1 {
+    font-size: 26px;
+    letter-spacing: 2px;
+    margin: 8px 0 4px;
+    background: linear-gradient(90deg, #6ea8ff, #b07cff, #ff7ce0);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .subtitle { color: var(--muted); font-size: 13px; margin-bottom: 18px; }
+  .game {
+    display: flex;
+    gap: 18px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .board-box {
+    position: relative;
+    background: var(--panel);
+    border-radius: 14px;
+    padding: 10px;
+    box-shadow: 0 12px 40px rgba(0,0,0,.45), inset 0 0 0 1px rgba(255,255,255,.04);
+  }
+  canvas#board { display: block; border-radius: 8px; background: #0b0e22; }
+  .side {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    width: 180px;
+  }
+  .card {
+    background: var(--panel);
+    border-radius: 12px;
+    padding: 12px 14px;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.04);
+  }
+  .card h3 { margin: 0 0 8px; font-size: 12px; color: var(--muted); letter-spacing: 1px; font-weight: 600; }
+  .stat { display: flex; justify-content: space-between; align-items: baseline; margin: 4px 0; }
+  .stat .label { color: var(--muted); font-size: 13px; }
+  .stat .value { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  canvas.mini { display: block; background: #0b0e22; border-radius: 6px; margin-top: 4px; }
+  .btns { display: flex; gap: 10px; margin-top: 16px; }
+  button {
+    flex: 1;
+    background: #232a55;
+    color: var(--text);
+    border: 1px solid rgba(255,255,255,.08);
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: .15s;
+  }
+  button:hover { background: #2c3566; }
+  button:active { transform: translateY(1px); }
+  .help { color: var(--muted); font-size: 12.5px; line-height: 1.7; margin-top: 18px; max-width: 560px; }
+  .help b { color: var(--text); font-weight: 600; }
+  .overlay {
+    position: absolute; inset: 10px;
+    border-radius: 8px;
+    background: rgba(8,10,26,.82);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    text-align: center;
+    gap: 10px;
+    backdrop-filter: blur(2px);
+  }
+  .overlay.show { display: flex; }
+  .overlay .big { font-size: 22px; font-weight: 700; }
+  .overlay .small { color: var(--muted); font-size: 13px; }
+  /* 触屏控制 */
+  .touch { display: none; gap: 10px; margin-top: 18px; width: 100%; max-width: 340px; }
+  .touch .row { display: flex; gap: 10px; }
+  .touch button { font-size: 18px; padding: 14px 0; }
+  @media (hover: none) and (pointer: coarse) {
+    .touch { display: flex; flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>俄罗斯方块 TETRIS</h1>
+    <div class="subtitle">单文件 · 离线可玩 · 可直接保存运行</div>
+
+    <div class="game">
+      <div class="board-box">
+        <canvas id="board" width="300" height="600"></canvas>
+        <div class="overlay" id="overlay">
+          <div class="big" id="ovTitle">准备开始</div>
+          <div class="small" id="ovSub">按 空格 或 点击开始</div>
+        </div>
+      </div>
+
+      <div class="side">
+        <div class="card">
+          <h3>数据</h3>
+          <div class="stat"><span class="label">得分</span><span class="value" id="score">0</span></div>
+          <div class="stat"><span class="label">消行</span><span class="value" id="lines">0</span></div>
+          <div class="stat"><span class="label">等级</span><span class="value" id="level">1</span></div>
+          <div class="stat"><span class="label">最高分</span><span class="value" id="best">0</span></div>
+        </div>
+        <div class="card">
+          <h3>下一个</h3>
+          <canvas class="mini" id="next" width="120" height="120"></canvas>
+        </div>
+        <div class="card">
+          <h3>暂存 (C)</h3>
+          <canvas class="mini" id="hold" width="120" height="120"></canvas>
+        </div>
+        <div class="btns">
+          <button id="pauseBtn">暂停</button>
+          <button id="restartBtn">重开</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="touch">
+      <div class="row">
+        <button data-act="hold">暂存</button>
+        <button data-act="rotate">⟳</button>
+        <button data-act="drop">⤓</button>
+      </div>
+      <div class="row">
+        <button data-act="left">←</button>
+        <button data-act="down">↓</button>
+        <button data-act="right">→</button>
+      </div>
+    </div>
+
+    <div class="help">
+      <b>键盘操作：</b> ← → 移动 ·  ↓ 软降 ·  ↑ / X 旋转 ·  Z 反向旋转 ·  C 暂存 ·  空格 硬降 ·  P 暂停 / 继续<br />
+      <b>目标：</b>填满整行即可消除得分，速度随等级提升。游戏结束或重新开始随时可点按钮。
+    </div>
+  </div>
+
+<script>
+(function () {
+  "use strict";
+
+  const COLS = 10, ROWS = 20, CELL = 30;
+  const board = document.getElementById("board");
+  const ctx = board.getContext("2d");
+  const nextCv = document.getElementById("next");
+  const nextCtx = nextCv.getContext("2d");
+  const holdCv = document.getElementById("hold");
+  const holdCtx = holdCv.getContext("2d");
+
+  const $score = document.getElementById("score");
+  const $lines = document.getElementById("lines");
+  const $level = document.getElementById("level");
+  const $best  = document.getElementById("best");
+  const $ov = document.getElementById("overlay");
+  const $ovTitle = document.getElementById("ovTitle");
+  const $ovSub = document.getElementById("ovSub");
+
+  const COLORS = {
+    I: "#3ad6ff", O: "#ffd23a", T: "#b06bff",
+    S: "#4fe07a", Z: "#ff5d6c", J: "#5b8cff", L: "#ff9f43"
+  };
+  const SHAPES = {
+    I: [[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]],
+    O: [[1,1],[1,1]],
+    T: [[0,1,0],[1,1,1],[0,0,0]],
+    S: [[0,1,1],[1,1,0],[0,0,0]],
+    Z: [[1,1,0],[0,1,1],[0,0,0]],
+    J: [[1,0,0],[1,1,1],[0,0,0]],
+    L: [[0,0,1],[1,1,1],[0,0,0]]
+  };
+
+  let grid, player, nextType, holdType, canHold;
+  let score, lines, level, dropInterval, dropCounter, lastTime;
+  let running = false, paused = false, gameOver = false;
+
+  let best = 0;
+  try { best = parseInt(localStorage.getItem("tetris-best") || "0", 10) || 0; } catch (e) {}
+  $best.textContent = best;
+
+  let bag = [];
+  function nextFromBag() {
+    if (bag.length === 0) {
+      bag = ["I","O","T","S","Z","J","L"];
+      for (let i = bag.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [bag[i], bag[j]] = [bag[j], bag[i]];
+      }
+    }
+    return bag.pop();
+  }
+
+  function makeGrid() {
+    return Array.from({ length: ROWS }, () => Array(COLS).fill(null));
+  }
+
+  function spawn(type) {
+    const matrix = SHAPES[type].map(r => r.slice());
+    const x = Math.floor((COLS - matrix[0].length) / 2);
+    return { type, matrix, x, y: -topOffset(matrix) };
+  }
+
+  function topOffset(matrix) {
+    for (let r = 0; r < matrix.length; r++)
+      if (matrix[r].some(v => v)) return r;
+    return 0;
+  }
+
+  function collide(matrix, px, py) {
+    for (let r = 0; r < matrix.length; r++) {
+      for (let c = 0; c < matrix[r].length; c++) {
+        if (!matrix[r][c]) continue;
+        const nx = px + c, ny = py + r;
+        if (nx < 0 || nx >= COLS || ny >= ROWS) return true;
+        if (ny >= 0 && grid[ny][nx]) return true;
+      }
+    }
+    return false;
+  }
+
+  function rotateCW(m) {
+    const n = m.length;
+    const res = Array.from({ length: n }, () => Array(n).fill(0));
+    for (let i = 0; i < n; i++)
+      for (let j = 0; j < n; j++)
+        res[i][j] = m[n - 1 - j][i];
+    return res;
+  }
+
+  function merge() {
+    const { matrix, x, y, type } = player;
+    for (let r = 0; r < matrix.length; r++)
+      for (let c = 0; c < matrix[r].length; c++)
+        if (matrix[r][c]) {
+          const ny = y + r, nx = x + c;
+          if (ny >= 0) grid[ny][nx] = type;
+        }
+  }
+
+  function clearLines() {
+    let cleared = 0;
+    for (let r = ROWS - 1; r >= 0; r--) {
+      if (grid[r].every(v => v)) {
+        grid.splice(r, 1);
+        grid.unshift(Array(COLS).fill(null));
+        cleared++;
+        r++; // 重新检查同一行
+      }
+    }
+    if (cleared > 0) {
+      const table = [0, 100, 300, 500, 800];
+      score += table[cleared] * level;
+      lines += cleared;
+      level = Math.floor(lines / 10) + 1;
+      dropInterval = Math.max(80, 800 - (level - 1) * 65);
+      if (score > best) {
+        best = score;
+        try { localStorage.setItem("tetris-best", String(best)); } catch (e) {}
+      }
+      updateStats();
+    }
+  }
+
+  function resetPlayer() {
+    player = spawn(nextType);
+    nextType = nextFromBag();
+    canHold = true;
+    if (collide(player.matrix, player.x, player.y)) {
+      endGame();
+    }
+    drawNext();
+  }
+
+  function holdPiece() {
+    if (!canHold || gameOver || paused || !running) return;
+    if (holdType == null) {
+      holdType = player.type;
+      resetPlayer();
+    } else {
+      const cur = player.type;
+      player = spawn(holdType);
+      holdType = cur;
+    }
+    canHold = false;
+    drawHold();
+  }
+
+  function softDrop() {
+    if (collide(player.matrix, player.x, player.y + 1)) {
+      merge(); clearLines(); resetPlayer();
+    } else {
+      player.y++;
+    }
+    dropCounter = 0;
+  }
+
+  function hardDrop() {
+    let d = 0;
+    while (!collide(player.matrix, player.x, player.y + 1)) { player.y++; d++; }
+    score += d * 2;
+    updateStats();
+    merge(); clearLines(); resetPlayer();
+    dropCounter = 0;
+  }
+
+  function move(dir) {
+    if (!collide(player.matrix, player.x + dir, player.y)) player.x += dir;
+  }
+
+  function rotate(dir) {
+    const rotated = dir > 0 ? rotateCW(player.matrix) : rotateCW(rotateCW(rotateCW(player.matrix)));
+    const kicks = [0, -1, 1, -2, 2];
+    for (const k of kicks) {
+      if (!collide(rotated, player.x + k, player.y)) {
+        player.matrix = rotated;
+        player.x += k;
+        return;
+      }
+    }
+  }
+
+  function updateStats() {
+    $score.textContent = score;
+    $lines.textContent = lines;
+    $level.textContent = level;
+    $best.textContent = best;
+  }
+
+  function drawCell(g, x, y, color, size) {
+    g.fillStyle = color;
+    g.fillRect(x * size + 1, y * size + 1, size - 2, size - 2);
+    g.fillStyle = "rgba(255,255,255,.18)";
+    g.fillRect(x * size + 1, y * size + 1, size - 2, 4);
+  }
+
+  function draw() {
+    ctx.fillStyle = "#0b0e22";
+    ctx.fillRect(0, 0, board.width, board.height);
+    // 网格线
+    ctx.strokeStyle = "rgba(255,255,255,.04)";
+    ctx.lineWidth = 1;
+    for (let x = 0; x <= COLS; x++) {
+      ctx.beginPath(); ctx.moveTo(x * CELL, 0); ctx.lineTo(x * CELL, ROWS * CELL); ctx.stroke();
+    }
+    for (let y = 0; y <= ROWS; y++) {
+      ctx.beginPath(); ctx.moveTo(0, y * CELL); ctx.lineTo(COLS * CELL, y * CELL); ctx.stroke();
+    }
+    // 已落定方块
+    for (let r = 0; r < ROWS; r++)
+      for (let c = 0; c < COLS; c++)
+        if (grid[r][c]) drawCell(ctx, c, r, COLORS[grid[r][c]], CELL);
+    // 落点预测
+    if (running && !gameOver && !paused) {
+      let gy = player.y;
+      while (!collide(player.matrix, player.x, gy + 1)) gy++;
+      ctx.globalAlpha = 0.22;
+      for (let r = 0; r < player.matrix.length; r++)
+        for (let c = 0; c < player.matrix[r].length; c++)
+          if (player.matrix[r][c]) {
+            const ny = gy + r, nx = player.x + c;
+            if (ny >= 0) drawCell(ctx, nx, ny, COLORS[player.type], CELL);
+          }
+      ctx.globalAlpha = 1;
+      // 当前方块
+      for (let r = 0; r < player.matrix.length; r++)
+        for (let c = 0; c < player.matrix[r].length; c++)
+          if (player.matrix[r][c]) {
+            const ny = player.y + r, nx = player.x + c;
+            if (ny >= 0) drawCell(ctx, nx, ny, COLORS[player.type], CELL);
+          }
+    }
+  }
+
+  function drawMini(g, type) {
+    g.clearRect(0, 0, g.canvas.width, g.canvas.height);
+    if (!type) return;
+    const m = SHAPES[type];
+    const size = 24;
+    // 居中
+    let minR = 99, maxR = -1, minC = 99, maxC = -1;
+    for (let r = 0; r < m.length; r++)
+      for (let c = 0; c < m[r].length; c++)
+        if (m[r][c]) { minR=Math.min(minR,r); maxR=Math.max(maxR,r); minC=Math.min(minC,c); maxC=Math.max(maxC,c); }
+    const w = (maxC - minC + 1) * size, h = (maxR - minR + 1) * size;
+    const ox = (g.canvas.width - w) / 2, oy = (g.canvas.height - h) / 2;
+    for (let r = minR; r <= maxR; r++)
+      for (let c = minC; c <= maxC; c++)
+        if (m[r][c]) {
+          g.fillStyle = COLORS[type];
+          g.fillRect(ox + (c - minC) * size + 1, oy + (r - minR) * size + 1, size - 2, size - 2);
+          g.fillStyle = "rgba(255,255,255,.18)";
+          g.fillRect(ox + (c - minC) * size + 1, oy + (r - minR) * size + 1, size - 2, 4);
+        }
+  }
+  function drawNext() { drawMini(nextCtx, nextType); }
+  function drawHold() { drawMini(holdCtx, holdType); }
+
+  function loop(time) {
+    if (!running) return;
+    if (!paused && !gameOver) {
+      const delta = time - lastTime;
+      lastTime = time;
+      dropCounter += delta;
+      if (dropCounter > dropInterval) softDrop();
+      draw();
+    }
+    requestAnimationFrame(loop);
+  }
+
+  function start() {
+    grid = makeGrid();
+    score = 0; lines = 0; level = 1;
+    dropInterval = 800; dropCounter = 0; lastTime = performance.now();
+    holdType = null; canHold = true;
+    nextType = nextFromBag();
+    resetPlayer();
+    running = true; paused = false; gameOver = false;
+    $ov.classList.remove("show");
+    updateStats(); drawHold();
+    requestAnimationFrame(loop);
+  }
+
+  function endGame() {
+    gameOver = true; running = false;
+    $ovTitle.textContent = "游戏结束";
+    $ovSub.textContent = "得分 " + score + " · 按 空格 / 点击重开";
+    $ov.classList.add("show");
+    draw();
+  }
+
+  function togglePause() {
+    if (!running || gameOver) return;
+    paused = !paused;
+    if (paused) {
+      $ovTitle.textContent = "已暂停";
+      $ovSub.textContent = "按 P 或 点击继续";
+      $ov.classList.add("show");
+    } else {
+      $ov.classList.remove("show");
+      lastTime = performance.now();
+    }
+  }
+
+  // 键盘
+  document.addEventListener("keydown", (e) => {
+    if (e.key === " " || ["ArrowLeft","ArrowRight","ArrowUp","ArrowDown"].includes(e.key)) e.preventDefault();
+    if (!running) {
+      if (e.key === " ") start();
+      return;
+    }
+    if (e.key === "p" || e.key === "P") { togglePause(); return; }
+    if (paused || gameOver) {
+      if (e.key === " " && gameOver) start();
+      return;
+    }
+    switch (e.key) {
+      case "ArrowLeft": move(-1); break;
+      case "ArrowRight": move(1); break;
+      case "ArrowDown": softDrop(); break;
+      case "ArrowUp": case "x": case "X": rotate(1); break;
+      case "z": case "Z": rotate(-1); break;
+      case " ": hardDrop(); break;
+      case "c": case "C": holdPiece(); break;
+    }
+    draw();
+  });
+
+  // 按钮
+  document.getElementById("pauseBtn").addEventListener("click", togglePause);
+  document.getElementById("restartBtn").addEventListener("click", start);
+  $ov.addEventListener("click", () => { if (!running || gameOver) start(); else togglePause(); });
+
+  // 触屏
+  document.querySelectorAll(".touch button").forEach(btn => {
+    btn.addEventListener("click", () => {
+      if (!running) { start(); return; }
+      if (paused || gameOver) return;
+      const a = btn.dataset.act;
+      if (a === "left") move(-1);
+      else if (a === "right") move(1);
+      else if (a === "down") softDrop();
+      else if (a === "rotate") rotate(1);
+      else if (a === "drop") hardDrop();
+      else if (a === "hold") holdPiece();
+      draw();
+    });
+  });
+
+  // 初始画面
+  grid = makeGrid();
+  draw();
+})();
+</script>
+</body>
+</html>
